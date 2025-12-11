@@ -1,0 +1,161 @@
+﻿@page "/"
+@using BudgetTracker.Shared.DTOs
+@using BudgetTracker.Shared.Enums
+@using BudgetTracker.BlazorWASM.Services
+@inject ITransactionService TransactionService
+@inject ChartService ChartService
+@inject ILogger<Dashboard> Logger
+
+<PageTitle>Dashboard - BudgetTracker</PageTitle>
+
+<div class="dashboard-container">
+    <div class="header-section">
+        <h2>Dashboard finansowy</h2>
+        <p class="text-muted">Przegląd Twoich wydatków w tym miesiącu.</p>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="spinner-container">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else
+    {
+        <div class="stats-grid">
+            <div class="stat-card income">
+                <div class="icon"><i class="fas fa-arrow-down"></i></div>
+                <div class="info">
+                    <span class="label">Przychody</span>
+                    <span class="value">@TotalIncome.ToString("C")</span>
+                </div>
+            </div>
+            <div class="stat-card expense">
+                <div class="icon"><i class="fas fa-arrow-up"></i></div>
+                <div class="info">
+                    <span class="label">Wydatki</span>
+                    <span class="value">@TotalExpense.ToString("C")</span>
+                </div>
+            </div>
+            <div class="stat-card balance">
+                <div class="icon"><i class="fas fa-wallet"></i></div>
+                <div class="info">
+                    <span class="label">Bilans</span>
+                    <span class="value">@((TotalIncome - TotalExpense).ToString("C"))</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-grid">
+
+            <div class="chart-section card-box">
+                <h4>Struktura wydatków</h4>
+                @if (TotalExpense > 0)
+                {
+                    <div class="chart-container">
+                        <canvas id="expensesChart"></canvas>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted text-center mt-5">Brak wydatków do wyświetlenia.</p>
+                }
+            </div>
+
+            <div class="recent-transactions card-box">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h4>Ostatnie operacje</h4>
+                    <a href="transactions" class="btn-link">Zobacz wszystkie</a>
+                </div>
+
+                @if (RecentTransactions.Any())
+                {
+                    <ul class="transaction-list">
+                        @foreach (var t in RecentTransactions)
+                        {
+                            <li class="transaction-item">
+                                <div class="t-info">
+                                    <span class="t-category" style="background-color: @t.ColorHex"></span>
+                                    <div>
+                                        <div class="t-desc">@t.Description</div>
+                                        <div class="t-date">@t.Date.ToShortDateString()</div>
+                                    </div>
+                                </div>
+                                <div class="t-amount @(t.Type == TransactionType.Expense ? "text-danger" : "text-success")">
+                                    @(t.Type == TransactionType.Expense ? "-" : "+")@t.Amount.ToString("C")
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <p class="text-muted">Brak transakcji.</p>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool isLoading = true;
+    private List<TransactionDto> transactions = new();
+
+
+    private decimal TotalIncome => transactions
+        .Where(t => t.Type == TransactionType.Income)
+        .Sum(t => t.Amount);
+
+    private decimal TotalExpense => transactions
+        .Where(t => t.Type == TransactionType.Expense)
+        .Sum(t => t.Amount);
+
+    private List<TransactionDto> RecentTransactions => transactions
+        .OrderByDescending(t => t.Date)
+        .Take(5)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            transactions = await TransactionService.GetTransactionsAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Krytyczny błąd podczas wyświetlenia wykresu.");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!isLoading && TotalExpense > 0)
+        {
+            await RenderChart();
+        }
+    }
+
+    private async Task RenderChart()
+    {
+        var expenseData = transactions
+            .Where(t => t.Type == TransactionType.Expense)
+            .GroupBy(t => t.CategoryName)
+            .Select(g => new
+            {
+                Category = g.Key,
+                Amount = g.Sum(t => t.Amount),
+                Color = g.First().ColorHex
+            })
+            .ToList();
+
+        var labels = expenseData.Select(x => x.Category).ToArray();
+        var data = expenseData.Select(x => x.Amount).ToArray();
+        var colors = expenseData.Select(x => x.Color).ToArray();
+
+        await ChartService.InitializePieChartAsync("expensesChart", labels, data, colors);
+    }
+}

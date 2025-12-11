@@ -1,0 +1,206 @@
+﻿@page "/transactions"
+@using BudgetTracker.Shared.DTOs
+@using BudgetTracker.Shared.Enums
+@using BudgetTracker.BlazorWASM.Services
+@inject ITransactionService TransactionService
+@inject IJSRuntime JS
+@inject ILogger<Transactions> Logger
+@inject Blazored.Toast.Services.IToastService ToastService
+
+<PageTitle>Transakcje - BudgetTracker</PageTitle>
+
+
+<div class="dashboard-container pt-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <h3 class="mb-1">Historia Operacji</h3>
+            <p class="text-muted mb-0">Pełna lista Twoich przychodów i wydatków</p>
+        </div>
+        <a href="transactions/create" class="btn btn-primary text-nowrap">
+            <i class="fas fa-plus me-2"></i> Nowa Transakcja
+        </a>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="spinner-container">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else if (!allTransactions.Any())
+    {
+        <div class="empty-state text-center py-5">
+            <i class="fas fa-receipt fa-3x text-muted mb-3"></i>
+            <h5>Brak transakcji</h5>
+            <p class="text-muted">Nie dodałeś jeszcze żadnych operacji.</p>
+            <a href="transactions/create" class="btn btn-outline-primary mt-2">Dodaj pierwszą</a>
+        </div>
+    }
+    else
+    {
+        <div class="card-box mb-3">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light">
+                        <tr>
+                            <th scope="col" width="15%">Data</th>
+                            <th scope="col" width="20%">Kategoria</th>
+                            <th scope="col" width="40%">Opis</th>
+                            <th scope="col" width="15%" class="text-end">Kwota</th>
+                            <th scope="col" width="10%" class="text-center">Akcje</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var t in pagedTransactions)
+                        {
+                            <tr>
+                                <td class="text-muted">@t.Date.ToString("dd.MM.yyyy")</td>
+                                <td>
+                                    <span class="badge rounded-pill"
+                                          style="background-color: @t.ColorHex; color: #fff; font-weight: 500;">
+                                        @t.CategoryName
+                                    </span>
+                                </td>
+                                <td class="fw-500">@t.Description</td>
+                                <td class="text-end fw-bold @(t.Type == TransactionType.Expense ? "text-danger" : "text-success")">
+                                    @(t.Type == TransactionType.Expense ? "-" : "+")@t.Amount.ToString("N2") zł
+                                </td>
+                                <td class="text-center">
+                                    <button class="btn btn-sm btn-link text-danger"
+                                            @onclick="() => DeleteTransaction(t.Id)"
+                                            title="Usuń">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        @if (totalPages > 1)
+        {
+            <div class="d-flex justify-content-center align-items-center gap-2 mt-4">
+                <button class="btn btn-outline-secondary btn-sm"
+                        disabled="@(currentPage == 1)"
+                        @onclick="PreviousPage">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+
+                <span class="text-muted small">
+                    Strona <strong>@currentPage</strong> z <strong>@totalPages</strong>
+                </span>
+
+                <button class="btn btn-outline-secondary btn-sm"
+                        disabled="@(currentPage == totalPages)"
+                        @onclick="NextPage">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<TransactionDto> allTransactions = new();
+    private List<TransactionDto> pagedTransactions = new();
+    private bool isLoading = true;
+
+    // Konfiguracja Paginacji
+    private int currentPage = 1;
+    private int pageSize = 5; // Ilość elementów na stronę
+    private int totalPages = 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            var result = await TransactionService.GetTransactionsAsync();
+            // Sortujemy od najnowszych
+            allTransactions = result.OrderByDescending(t => t.Date).ToList();
+            CalculatePagination();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Błąd pobierania transakcji");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void CalculatePagination()
+    {
+        // Obliczamy liczbę stron
+        totalPages = (int)Math.Ceiling((double)allTransactions.Count / pageSize);
+
+        // Zabezpieczenie: jeśli usunęliśmy ostatni element na stronie, wracamy stronę wcześniej
+        if (currentPage > totalPages && totalPages > 0) currentPage = totalPages;
+        if (currentPage < 1) currentPage = 1;
+
+        UpdatePagedData();
+    }
+
+    private void UpdatePagedData()
+    {
+        // Logika "Slice" - pobieramy tylko wycinek listy dla danej strony
+        pagedTransactions = allTransactions
+            .Skip((currentPage - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
+    }
+
+    private void NextPage()
+    {
+        if (currentPage < totalPages)
+        {
+            currentPage++;
+            UpdatePagedData();
+        }
+    }
+
+    private void PreviousPage()
+    {
+        if (currentPage > 1)
+        {
+            currentPage--;
+            UpdatePagedData();
+        }
+    }
+
+    private async Task DeleteTransaction(int id)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", "Czy na pewno chcesz usunąć tę transakcję?");
+
+        if (confirmed)
+        {
+            try
+            {
+                await TransactionService.DeleteTransactionAsync(id);
+
+                var itemToRemove = allTransactions.FirstOrDefault(t => t.Id == id);
+                if (itemToRemove != null)
+                {
+                    allTransactions.Remove(itemToRemove);
+                    CalculatePagination();
+
+                    ToastService.ShowSuccess("Transakcja usunięta pomyślnie.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Błąd usuwania");
+
+                ToastService.ShowError("Nie udało się usunąć transakcji. Spróbuj ponownie.");
+            }
+        }
+    }
+}

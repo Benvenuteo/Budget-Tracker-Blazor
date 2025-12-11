@@ -1,0 +1,102 @@
+﻿@page "/register"
+@using BudgetTracker.Shared.DTOs
+@using BudgetTracker.BlazorWASM.Services
+@inject IAuthenticationService AuthService
+@inject NavigationManager Navigation
+@inject Blazored.Toast.Services.IToastService ToastService
+@inject ILogger<Register> Logger
+
+<div class="auth-wrapper">
+    <div class="auth-card">
+        <div class="auth-header">
+            <h3>Załóż konto</h3>
+            <p>Dołącz do nas i kontroluj swoje finanse.</p>
+        </div>
+
+        <EditForm Model="registerModel" OnValidSubmit="HandleRegistration">
+            <DataAnnotationsValidator />
+
+            <div class="form-group">
+                <label>Adres Email</label>
+                <InputText @bind-Value="registerModel.Email" class="form-control" placeholder="name@example.com" />
+                <ValidationMessage For="@(() => registerModel.Email)" />
+            </div>
+
+            <div class="form-group">
+                <label>Hasło</label>
+                <InputText @bind-Value="registerModel.Password" type="password" class="form-control" placeholder="Minimum 8 znaków" />
+                <ValidationMessage For="@(() => registerModel.Password)" />
+            </div>
+
+            <div class="form-group">
+                <label>Potwierdź hasło</label>
+                <InputText @bind-Value="registerModel.ConfirmPassword" type="password" class="form-control" placeholder="Powtórz hasło" />
+                <ValidationMessage For="@(() => registerModel.ConfirmPassword)" />
+            </div>
+
+            @if (apiErrors.Any())
+            {
+                <div class="alert alert-danger">
+                    <ul class="mb-0 ps-3">
+                        @foreach (var error in apiErrors)
+                        {
+                            <li>@error</li>
+                        }
+                    </ul>
+                </div>
+            }
+
+            <button type="submit" class="btn-primary full-width" disabled="@isLoading">
+                @if (isLoading)
+                {
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    <span> Rejestracja...</span>
+                }
+                else
+                {
+                    <span>Zarejestruj się</span>
+                }
+            </button>
+        </EditForm>
+
+        <div class="auth-footer">
+            Masz już konto? <a href="login">Zaloguj się</a>
+        </div>
+    </div>
+</div>
+
+@code {
+    private RegisterDto registerModel = new();
+    private bool isLoading = false;
+    private List<string> apiErrors = new();
+
+    private async Task HandleRegistration()
+    {
+        isLoading = true;
+        apiErrors.Clear();
+
+        try
+        {
+            await AuthService.Register(registerModel);
+
+            ToastService.ShowSuccess("Konto utworzone! Możesz się zalogować.");
+            Navigation.NavigateTo("/login");
+        }
+        catch (HttpRequestException ex)
+        {
+            Logger.LogWarning(ex, "Nieudana próba rejestracji (API Error).");
+
+            apiErrors.Add("Wystąpił błąd podczas rejestracji.");
+
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Krytyczny błąd podczas rejestracji.");
+            apiErrors.Add("Wystąpił nieoczekiwany błąd.");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

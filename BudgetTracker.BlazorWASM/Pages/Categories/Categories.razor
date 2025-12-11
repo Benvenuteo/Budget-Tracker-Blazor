@@ -1,0 +1,75 @@
+﻿@page "/categories"
+@using BudgetTracker.Shared.DTOs
+@using BudgetTracker.BlazorWASM.Services
+@inject ICategoryService CategoryService
+@inject NavigationManager Navigation
+@inject ILogger<Categories> Logger
+
+<PageTitle>Kategorie - BudgetTracker</PageTitle>
+
+<div class="dashboard-container pt-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <h3 class="mb-1">Twoje Kategorie</h3>
+            <p class="text-muted mb-0">Zarządzaj grupami swoich wydatków</p>
+        </div>
+        <a href="categories/create" class="btn btn-primary text-nowrap">
+            <i class="fas fa-plus me-2"></i> Nowa Kategoria
+        </a>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="spinner-container">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else if (!categories.Any())
+    {
+        <div class="empty-state text-center py-5">
+            <i class="fas fa-folder-open fa-3x text-muted mb-3"></i>
+            <h5>Brak kategorii</h5>
+            <p class="text-muted">Nie zdefiniowałeś jeszcze żadnych kategorii wydatków.</p>
+            <a href="categories/create" class="btn btn-outline-primary mt-2">Stwórz pierwszą</a>
+        </div>
+    }
+    else
+    {
+        <div class="categories-grid">
+            @foreach (var cat in categories)
+            {
+                <div class="category-card" style="border-left-color: @cat.ColorHex">
+                    <div class="card-content">
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="color-dot" style="background-color: @cat.ColorHex"></span>
+                            <h5 class="mb-0 ms-2">@cat.Name</h5>
+                        </div>
+                        <small class="text-muted">ID: @cat.Id</small>
+                    </div>
+
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<CategoryDto> categories = new();
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            categories = await CategoryService.GetCategoriesAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Błąd podczas pobierania kategorii");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

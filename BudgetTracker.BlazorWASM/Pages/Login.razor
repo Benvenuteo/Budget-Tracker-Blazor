@@ -1,0 +1,95 @@
+﻿@page "/login"
+@using BudgetTracker.Shared.DTOs
+@using BudgetTracker.BlazorWASM.Services
+@inject IAuthenticationService AuthService
+@inject NavigationManager Navigation
+@inject Blazored.Toast.Services.IToastService ToastService
+
+<div class="auth-wrapper">
+    <div class="auth-card">
+        <div class="auth-header">
+            <h3>Witaj ponownie!</h3>
+            <p>Zaloguj się, aby zarządzać budżetem.</p>
+        </div>
+
+        <EditForm Model="loginModel" OnValidSubmit="HandleLogin">
+            <DataAnnotationsValidator />
+
+            <div class="form-group">
+                <label>Adres Email</label>
+                <InputText @bind-Value="loginModel.Email" class="form-control" placeholder="name@example.com" />
+                <ValidationMessage For="@(() => loginModel.Email)" />
+            </div>
+
+            <div class="form-group">
+                <label>Hasło</label>
+                <InputText @bind-Value="loginModel.Password" type="password" class="form-control" placeholder="••••••••" />
+                <ValidationMessage For="@(() => loginModel.Password)" />
+            </div>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-circle"></i> @errorMessage
+                </div>
+            }
+
+            <button type="submit" class="btn-primary full-width" disabled="@isLoading">
+                @if (isLoading)
+                {
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    <span> Logowanie...</span>
+                }
+                else
+                {
+                    <span>Zaloguj się</span>
+                }
+            </button>
+        </EditForm>
+
+        <div class="auth-footer">
+            Nie masz konta? <a href="register">Zarejestruj się</a>
+        </div>
+    </div>
+</div>
+
+@code {
+    private LoginDto loginModel = new();
+    private bool isLoading = false;
+    private string? errorMessage;
+
+    // Automatycznie pobiera parametr ?returnUrl=... z paska adresu
+    [SupplyParameterFromQuery]
+    public string? ReturnUrl { get; set; }
+
+    private async Task HandleLogin()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var result = await AuthService.Login(loginModel);
+
+            if (result.IsSuccess)
+            {
+                ToastService.ShowSuccess("Zalogowano pomyślnie!");
+                Navigation.NavigateTo(ReturnUrl ?? "/");
+            }
+            else
+            {
+                errorMessage = "Nieprawidłowy email lub hasło.";
+                ToastService.ShowError("Logowanie nieudane.");
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Wystąpił błąd połączenia z serwerem.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

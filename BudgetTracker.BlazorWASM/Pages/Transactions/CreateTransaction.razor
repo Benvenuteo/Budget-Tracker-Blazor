@@ -1,0 +1,135 @@
+﻿@page "/transactions/create"
+@using BudgetTracker.Shared.DTOs
+@using BudgetTracker.Shared.Enums
+@using BudgetTracker.BlazorWASM.Services
+@inject ITransactionService TransactionService
+@inject ICategoryService CategoryService
+@inject NavigationManager Navigation
+@inject Blazored.Toast.Services.IToastService ToastService
+@inject ILogger<CreateTransaction> Logger
+
+<div class="page-container">
+    <div class="form-card">
+        <div class="form-header @(model.Type == TransactionType.Expense ? "bg-expense" : "bg-income")">
+            <h3>Nowa Transakcja</h3>
+            <p>Wprowadź szczegóły operacji</p>
+        </div>
+
+        <div class="form-body">
+            <EditForm Model="model" OnValidSubmit="HandleSubmit">
+                <DataAnnotationsValidator />
+
+                <div class="type-toggle mb-4">
+                    <button type="button"
+                            class="toggle-btn @(model.Type == TransactionType.Expense ? "active-expense" : "")"
+                            @onclick="() => model.Type = TransactionType.Expense">
+                        <i class="fas fa-arrow-down me-2"></i> Wydatek
+                    </button>
+                    <button type="button"
+                            class="toggle-btn @(model.Type == TransactionType.Income ? "active-income" : "")"
+                            @onclick="() => model.Type = TransactionType.Income">
+                        <i class="fas fa-arrow-up me-2"></i> Przychód
+                    </button>
+                </div>
+
+                <div class="form-group mb-3">
+                    <label>Opis</label>
+                    <InputText @bind-Value="model.Description" class="form-control" placeholder="Np. Zakupy w Biedronce" />
+                    <ValidationMessage For="@(() => model.Description)" />
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label>Kwota</label>
+                        <div class="input-group">
+                            <InputNumber @bind-Value="model.Amount" class="form-control" placeholder="0.00" />
+                            <span class="input-group-text">PLN</span>
+                        </div>
+                        <ValidationMessage For="@(() => model.Amount)" />
+                    </div>
+                    <div class="col-md-6">
+                        <label>Data</label>
+                        <InputDate @bind-Value="model.Date" class="form-control" />
+                        <ValidationMessage For="@(() => model.Date)" />
+                    </div>
+                </div>
+
+                <div class="form-group mb-4">
+                    <label>Kategoria</label>
+                    <InputSelect @bind-Value="model.CategoryId" class="form-select">
+                        <option value="0" disabled selected>-- Wybierz kategorię --</option>
+                        @foreach (var cat in categories)
+                        {
+                            <option value="@cat.Id">@cat.Name</option>
+                        }
+                    </InputSelect>
+                    <ValidationMessage For="@(() => model.CategoryId)" />
+                    @if (!categories.Any() && !isLoadingCategories)
+                    {
+                        <small class="text-danger">Nie masz jeszcze żadnych kategorii. <a href="categories">Dodaj pierwszą!</a></small>
+                    }
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center">
+                    <a href="/" class="btn btn-link text-muted">Anuluj</a>
+                    <button type="submit" class="btn btn-primary btn-lg" disabled="@isSubmitting">
+                        @if (isSubmitting)
+                        {
+                            <span>Zapisywanie...</span>
+                        }
+                        else
+                        {
+                            <span>Dodaj transakcję</span>
+                        }
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    private CreateTransactionDto model = new() { Date = DateTime.Today };
+    private List<CategoryDto> categories = new();
+    private bool isLoadingCategories = true;
+    private bool isSubmitting = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            categories = await CategoryService.GetCategoriesAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Błąd pobierania kategorii");
+            ToastService.ShowError("Nie udało się pobrać kategorii.");
+        }
+        finally
+        {
+            isLoadingCategories = false;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        isSubmitting = true;
+        try
+        {
+            Logger.LogInformation("Dodawanie transakcji: {Desc} ({Amount})", model.Description, model.Amount);
+            await TransactionService.CreateTransaction(model);
+
+            ToastService.ShowSuccess("Transakcja dodana pomyślnie!");
+            Navigation.NavigateTo("/"); // Wróć do Dashboardu
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Błąd zapisu transakcji");
+            ToastService.ShowError("Wystąpił błąd podczas zapisu.");
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+}

@@ -1,0 +1,19 @@
+﻿@inject NavigationManager Navigation
+
+<div class="redirect-container">
+    <p>Przekierowywanie do logowania...</p>
+    <div class="spinner"></div>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        // Pobieramy aktualny adres
+        var returnUrl = Navigation.Uri;
+
+        var encodedReturnUrl = Uri.EscapeDataString(returnUrl);
+
+        // Przekierowujemy do strony logowania z parametrem returnUrl
+        Navigation.NavigateTo($"login?returnUrl={encodedReturnUrl}");
+    }
+}
