@@ -1,5 +1,7 @@
 # Budget-Tracker-Blazor
 
+https://benvenuteo.github.io/budget-tracker-frontend/ -----> (link powinno działać do 10.01.2026)
+
 BudgetTracker to aplikacja typu SPA (Single Page Application) do zarządzania budżetem domowym, zbudowana w oparciu o **.NET 8**, **Blazor WebAssembly** oraz **Clean Architecture**.
 
 Projekt powstał w celu demonstracji wzorców projektowych, separacji warstw aplikacji oraz integracji .NET z ekosystemem przeglądarki.
